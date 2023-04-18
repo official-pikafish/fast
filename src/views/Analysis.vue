@@ -16,7 +16,7 @@ import ChessProcess from "@/ts/ChessProcess";
 import type { EngineInfo } from "@/ts/UciFilter";
 import type { PV } from "@/ts/PrincipalVariation";
 
-const startpos = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const startpos = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1";
 
 export default defineComponent({
   name: "app",
@@ -430,9 +430,9 @@ h1 {
 .game {
   display: flex;
   flex-direction: column;
-  flex: 0 0 66%;
+  flex: 0 0 60%;
   box-sizing: border-box;
-  max-width: 66%;
+  max-width: 60%;
 }
 
 @media only screen and (min-width: 600px) {

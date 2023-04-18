@@ -1,16 +1,17 @@
 <script lang="ts">
 import { defineComponent } from "vue";
 
-import { Chessground } from "chessground";
-import { Chess, SQUARES } from "chess.js";
+import { Chessground } from "chessgroundx";
+import { Notation } from "chessgroundx/types";
+import { Chess, SQUARES } from "@/ts/xiangqi";
+import { uciToUCICyclone, uciCycloneToUCI } from "@/ts/MoveProcess";
 
 import type { Move } from "@/ts/UciFilter";
-import type { Square } from "chess.js";
-import type { Color, Key } from "chessground/types";
+import type { Color, Key } from "chessgroundx/types";
 
 type ChessgroundInstance = ReturnType<typeof Chessground>;
 
-const startpos = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const startpos = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1";
 
 export default defineComponent({
   data() {
@@ -19,10 +20,10 @@ export default defineComponent({
       promotionMove: { origin: "", destination: "" },
 
       cg: null as ChessgroundInstance | null,
-      game: new Chess(),
+      game: Chess(),
 
       moveHistoryLan: [] as string[],
-      moveHistorySan: [] as string[],
+      moveHistorySan: [] as string[]
     };
   },
   mounted() {
@@ -30,22 +31,27 @@ export default defineComponent({
       movable: {
         color: "white" as Color,
         free: false,
-        dests: this.toDests(),
+        dests: this.toDests()
       },
       draggable: {
-        showGhost: true,
+        showGhost: true
       },
       events: {
-        move: this.makeMove,
+        move: this.makeMove
       },
       highlight: {
         lastMove: true,
-        check: true,
+        check: true
       },
       drawable: {
         enabled: false,
-        eraseOnClick: false,
+        eraseOnClick: false
       },
+      dimensions: {
+        width: 9,
+        height: 10
+      },
+      notation: Notation.XIANGQI_HANNUM
     };
 
     const board = this.$refs.board as HTMLElement;
@@ -87,7 +93,7 @@ export default defineComponent({
 
       const boardWrap = document.querySelector(".board.cg-wrap") as HTMLElement;
 
-      boardWrap.style.width = size + "px";
+      boardWrap.style.width = (size * 9) / 10 + "px";
       boardWrap.style.height = size + "px";
       document.body.dispatchEvent(new Event("chessground.resize"));
     },
@@ -100,18 +106,18 @@ export default defineComponent({
         turnColor: this.toColor(),
         movable: {
           color: this.toColor(),
-          dests: this.toDests(),
-        },
+          dests: this.toDests()
+        }
       });
 
       // set check highlighting
       if (this.game.inCheck()) {
         this.cg?.set({
-          check: this.toColor(),
+          check: this.toColor()
         });
       } else {
         this.cg?.set({
-          check: undefined,
+          check: undefined
         });
       }
 
@@ -123,8 +129,8 @@ export default defineComponent({
         {
           orig: move.orig as Key,
           dest: move.dest as Key,
-          brush: "paleBlue",
-        },
+          brush: "paleBlue"
+        }
       ]);
     },
     drawMoveStr(origin: string, dest: string) {
@@ -132,8 +138,8 @@ export default defineComponent({
         {
           orig: origin as Key,
           dest: dest as Key,
-          brush: "paleBlue",
-        },
+          brush: "paleBlue"
+        }
       ]);
     },
     toColor(): Color {
@@ -145,39 +151,13 @@ export default defineComponent({
       SQUARES.forEach((s) => {
         const moves = this.game.moves({ square: s });
         if (moves.length) {
-          dests.set(
-            s,
-            moves.map((m) => {
-              // horrible hack to get the destination square
-              // all because chess.js verbose printer is so slow,
-              // this is a 30x speedup to the previous approach
-              let to;
-              if (m.includes("=")) {
-                const index = m.indexOf("=");
-                to = m.slice(index - 2, index);
-              } else if (m.includes("x")) {
-                const index = m.indexOf("x");
-                to = m.slice(index + 1, index + 3);
-              } else if (m === "O-O" || m === "O-O-O") {
-                if (m === "O-O") {
-                  to = s === "e1" ? "g1" : "g8";
-                } else {
-                  to = s === "e1" ? "c1" : "c8";
-                }
-              } else if (m.endsWith("+") || m.endsWith("#")) {
-                to = m.slice(m.length - 3, m.length - 1);
-              } else if (m.length == 2) {
-                to = m;
-              } else if (m.length == 3) {
-                to = m.slice(1);
-              } else {
-                to = m.slice(m.length - 2, m.length);
-              }
-              return to;
-            })
-          );
+          moves.map((m) => {
+            const { from, to } = uciCycloneToUCI(m.slice(0, 2), m.slice(2, 4));
+            dests.set(from, (dests.get(from) || []).concat(to));
+          });
         }
       });
+      console.log(dests);
       return dests;
     },
     undo() {
@@ -189,42 +169,19 @@ export default defineComponent({
       this.sendUpdates();
     },
     async makeMove(origin: string, destination: string) {
-      // is promotion?
-      if (
-        this.game.get(origin as Square)?.type === "p" &&
-        (destination[1] === "1" || destination[1] === "8")
-      ) {
-        this.showPromotion = true;
-        this.promotionMove = { origin, destination };
-
-        // user has to select a promotion piece and makePromotionMove() will be called
-        return;
-      }
-
+      let { from, to } = uciToUCICyclone(origin, destination);
       // do move
       const move = this.game.move({
-        from: origin,
-        to: destination,
+        from: from,
+        to: to
       });
 
       this.updateMove(move);
     },
-    async makePromotionMove(piece: string) {
-      this.showPromotion = false;
-
-      // do move
-      const promotionMove = this.game.move({
-        from: this.promotionMove.origin,
-        to: this.promotionMove.destination,
-        promotion: piece,
-      });
-
-      this.updateMove(promotionMove);
-    },
     async sendUpdates() {
       this.$emit("updated-move", {
         moveHistoryLan: this.moveHistoryLan,
-        moveHistorySan: this.moveHistorySan,
+        moveHistorySan: this.moveHistorySan
       });
 
       this.updateCG();
@@ -250,8 +207,8 @@ export default defineComponent({
         return "snapback";
       }
 
-      this.moveHistoryLan.push(move.lan);
-      this.moveHistorySan.push(move.san);
+      this.moveHistoryLan.push(move.iccs);
+      this.moveHistorySan.push(move.iccs);
 
       this.sendUpdates();
     },
@@ -276,8 +233,8 @@ export default defineComponent({
           return;
         }
 
-        this.moveHistoryLan.push(chessMove.lan);
-        this.moveHistorySan.push(chessMove.san);
+        this.moveHistoryLan.push(chessMove.iccs);
+        this.moveHistorySan.push(chessMove.iccs);
       }
 
       this.sendUpdates();
@@ -303,60 +260,40 @@ export default defineComponent({
         this.updateMove(move);
         this.clearLastMove();
       });
-    },
-  },
+    }
+  }
 });
 </script>
 
 <template>
   <div class="board-space" ref="boardSpace">
     <div class="board" ref="board"></div>
-    <div class="promotion-options" v-if="showPromotion">
-      <div id="promotion-select">
-        <button
-          class="piece white-queen"
-          @click="makePromotionMove('q')"
-        ></button>
-        <button
-          class="piece white-rook"
-          @click="makePromotionMove('r')"
-        ></button>
-        <button
-          class="piece white-bishop"
-          @click="makePromotionMove('b')"
-        ></button>
-        <button
-          class="piece white-knight"
-          @click="makePromotionMove('n')"
-        ></button>
-      </div>
-    </div>
   </div>
 </template>
 
 <style>
 @media only screen and (min-width: 600px) {
-  .board-space {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    height: 100%;
-    padding-left: 5rem;
-  }
+    .board-space {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+        padding-left: 5rem;
+    }
 }
 
 @media only screen and (max-width: 600px) {
-  .board-space {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    height: 100%;
-  }
+    .board-space {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+    }
 }
 </style>

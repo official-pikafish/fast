@@ -10,7 +10,7 @@ import {
   formatPv,
 } from "@/ts/FormatInput";
 
-import { Chess } from "chess.js";
+import { Chess } from "@/ts/xiangqi";
 
 import type { PV } from "@/ts/PrincipalVariation";
 
@@ -74,7 +74,7 @@ export default defineComponent({
       let fen = this.fen;
       const pv = this.engineLinesSorted[pvIndex].pv;
 
-      let chess = new Chess(fen);
+      let chess = Chess(fen);
 
       for (let i = 0; i < moveIndex + 1; i++) {
         const move = pv[i].trim();

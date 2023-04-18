@@ -5,7 +5,8 @@
 <script lang="ts">
 import { defineComponent } from "vue";
 
-import { Chessground } from "chessground";
+import { Chessground } from "chessgroundx";
+import { Notation } from "chessgroundx/types";
 
 type ChessgroundInstance = ReturnType<typeof Chessground>;
 
@@ -24,6 +25,11 @@ export default defineComponent({
       coordinates: false,
       viewOnly: true,
       addPieceZIndex: true,
+      dimensions: {
+        width: 9,
+        height: 10,
+      },
+      notation: Notation.XIANGQI_HANNUM,
     });
 
     const boardWrap = document.querySelector(
