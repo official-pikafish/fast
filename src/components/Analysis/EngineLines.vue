@@ -37,7 +37,7 @@ export default defineComponent({
   watch: {
     engineLines: {
       handler: function (newVal, oldVal) {
-        let lines: PV[] = Array.from(newVal.values());
+        const lines: PV[] = Array.from(newVal.values());
 
         // sort others by depth
         lines.sort((a, b) => {
@@ -71,10 +71,10 @@ export default defineComponent({
     formatTime,
     formatPv,
     getFenForMove(pvIndex: number, moveIndex: number): string {
-      let fen = this.fen;
+      const fen = this.fen;
       const pv = this.engineLinesSorted[pvIndex].pv;
 
-      let chess = Chess(fen);
+      const chess = Chess(fen);
 
       for (let i = 0; i < moveIndex + 1; i++) {
         const move = pv[i].trim();

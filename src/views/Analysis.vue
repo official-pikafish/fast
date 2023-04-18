@@ -16,7 +16,8 @@ import ChessProcess from "@/ts/ChessProcess";
 import type { EngineInfo } from "@/ts/UciFilter";
 import type { PV } from "@/ts/PrincipalVariation";
 
-const startpos = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1";
+const startpos =
+  "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1";
 
 export default defineComponent({
   name: "app",
@@ -117,10 +118,10 @@ export default defineComponent({
       if (score === undefined) return "";
       let norm = "";
       if (score.startsWith("cp")) {
-        let cp = Number(score.slice(2));
+        const cp = Number(score.slice(2));
         norm = "cp " + this.normalizePerspectiveScore(cp);
       } else if (score.startsWith("mate")) {
-        let mateIn = Number(score.slice(4));
+        const mateIn = Number(score.slice(4));
         norm = "mate " + this.normalizePerspectiveScore(mateIn);
       }
       return norm;
@@ -220,7 +221,7 @@ export default defineComponent({
         );
       }
 
-      let lines = extractPV(line);
+      const lines = extractPV(line);
       lines.score = this.normalizeScoreStr(lines.score);
 
       if (lines.pv[0]) {

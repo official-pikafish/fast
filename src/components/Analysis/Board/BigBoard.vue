@@ -4,14 +4,15 @@ import { defineComponent } from "vue";
 import { Chessground } from "chessgroundx";
 import { Notation } from "chessgroundx/types";
 import { Chess, SQUARES } from "@/ts/xiangqi";
-import { uciToUCICyclone, uciCycloneToUCI } from "@/ts/MoveProcess";
+import { uci2cg, cg2uci } from "@/ts/UciFilter";
 
 import type { Move } from "@/ts/UciFilter";
 import type { Color, Key } from "chessgroundx/types";
 
 type ChessgroundInstance = ReturnType<typeof Chessground>;
 
-const startpos = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1";
+const startpos =
+  "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1";
 
 export default defineComponent({
   data() {
@@ -23,7 +24,7 @@ export default defineComponent({
       game: Chess(),
 
       moveHistoryLan: [] as string[],
-      moveHistorySan: [] as string[]
+      moveHistorySan: [] as string[],
     };
   },
   mounted() {
@@ -31,27 +32,27 @@ export default defineComponent({
       movable: {
         color: "white" as Color,
         free: false,
-        dests: this.toDests()
+        dests: this.toDests(),
       },
       draggable: {
-        showGhost: true
+        showGhost: true,
       },
       events: {
-        move: this.makeMove
+        move: this.makeMove,
       },
       highlight: {
         lastMove: true,
-        check: true
+        check: true,
       },
       drawable: {
         enabled: false,
-        eraseOnClick: false
+        eraseOnClick: false,
       },
       dimensions: {
         width: 9,
-        height: 10
+        height: 10,
       },
-      notation: Notation.XIANGQI_HANNUM
+      notation: Notation.XIANGQI_HANNUM,
     };
 
     const board = this.$refs.board as HTMLElement;
@@ -106,18 +107,18 @@ export default defineComponent({
         turnColor: this.toColor(),
         movable: {
           color: this.toColor(),
-          dests: this.toDests()
-        }
+          dests: this.toDests(),
+        },
       });
 
       // set check highlighting
       if (this.game.inCheck()) {
         this.cg?.set({
-          check: this.toColor()
+          check: this.toColor(),
         });
       } else {
         this.cg?.set({
-          check: undefined
+          check: undefined,
         });
       }
 
@@ -125,21 +126,23 @@ export default defineComponent({
       this.$emit("updated-cg", this.game.fen());
     },
     drawMove(move: Move) {
+      const { from, to } = uci2cg(move.orig, move.dest);
       this.cg?.setShapes([
         {
-          orig: move.orig as Key,
-          dest: move.dest as Key,
-          brush: "paleBlue"
-        }
+          orig: from as Key,
+          dest: to as Key,
+          brush: "paleBlue",
+        },
       ]);
     },
     drawMoveStr(origin: string, dest: string) {
+      const { from, to } = uci2cg(origin, dest);
       this.cg?.setShapes([
         {
-          orig: origin as Key,
-          dest: dest as Key,
-          brush: "paleBlue"
-        }
+          orig: from as Key,
+          dest: to as Key,
+          brush: "paleBlue",
+        },
       ]);
     },
     toColor(): Color {
@@ -149,13 +152,10 @@ export default defineComponent({
     toDests() {
       const dests = new Map();
       SQUARES.forEach((s) => {
-        const moves = this.game.moves({ square: s });
-        if (moves.length) {
-          moves.map((m) => {
-            const { from, to } = uciCycloneToUCI(m.slice(0, 2), m.slice(2, 4));
-            dests.set(from, (dests.get(from) || []).concat(to));
-          });
-        }
+        this.game.moves({ square: s }).map((m: any) => {
+          const { from, to } = uci2cg(m.slice(0, 2), m.slice(2, 4));
+          dests.set(from, (dests.get(from) || []).concat(to));
+        });
       });
       console.log(dests);
       return dests;
@@ -169,11 +169,11 @@ export default defineComponent({
       this.sendUpdates();
     },
     async makeMove(origin: string, destination: string) {
-      let { from, to } = uciToUCICyclone(origin, destination);
+      const { from, to } = cg2uci(origin, destination);
       // do move
       const move = this.game.move({
         from: from,
-        to: to
+        to: to,
       });
 
       this.updateMove(move);
@@ -181,7 +181,7 @@ export default defineComponent({
     async sendUpdates() {
       this.$emit("updated-move", {
         moveHistoryLan: this.moveHistoryLan,
-        moveHistorySan: this.moveHistorySan
+        moveHistorySan: this.moveHistorySan,
       });
 
       this.updateCG();
@@ -225,7 +225,7 @@ export default defineComponent({
         }
 
         const move = movesArray[i];
-        const chessMove = this.game.move(move);
+        const chessMove: any = this.game.move(move);
 
         if (chessMove === null) {
           this.updateCG();
@@ -251,7 +251,7 @@ export default defineComponent({
     async newPositionPgn(pgn: string) {
       this.game.loadPgn(pgn);
 
-      let history = this.game.history({ verbose: true });
+      const history = this.game.history({ verbose: true });
 
       this.moveHistoryLan = [];
       this.moveHistorySan = [];
@@ -260,8 +260,8 @@ export default defineComponent({
         this.updateMove(move);
         this.clearLastMove();
       });
-    }
-  }
+    },
+  },
 });
 </script>
 
@@ -273,27 +273,27 @@ export default defineComponent({
 
 <style>
 @media only screen and (min-width: 600px) {
-    .board-space {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        height: 100%;
-        padding-left: 5rem;
-    }
+  .board-space {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    padding-left: 5rem;
+  }
 }
 
 @media only screen and (max-width: 600px) {
-    .board-space {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        height: 100%;
-    }
+  .board-space {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+  }
 }
 </style>
