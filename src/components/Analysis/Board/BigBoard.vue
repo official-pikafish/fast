@@ -157,7 +157,6 @@ export default defineComponent({
           dests.set(from, (dests.get(from) || []).concat(to));
         });
       });
-      console.log(dests);
       return dests;
     },
     undo() {
