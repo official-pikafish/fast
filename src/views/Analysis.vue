@@ -13,7 +13,7 @@ import { filterUCIInfo } from "@/ts/UciFilter";
 import { extractPV } from "@/ts/PrincipalVariation";
 import ChessProcess from "@/ts/ChessProcess";
 
-import type { EngineInfo } from "@/ts/UciFilter";
+import { extractScore, type EngineInfo } from "@/ts/UciFilter";
 import type { PV } from "@/ts/PrincipalVariation";
 
 const startpos =
@@ -73,6 +73,64 @@ export default defineComponent({
 
       status: "IDLE",
       sideToMove: "white",
+
+      evalHistory: [] as number[],
+      graphTimer: null as number | null,
+      series: [
+        {
+          name: "series-1",
+          data: [] as number[],
+        },
+      ],
+      options: {
+        colors: ["#1D4ED8"],
+        stroke: {
+          curve: "straight",
+          width: 2.5,
+        },
+        markers: {
+          size: 0,
+          hover: {
+            size: null,
+            sizeOffset: 0,
+          },
+        },
+        chart: {
+          toolbar: {
+            show: false,
+          },
+          zoom: {
+            enabled: false,
+          },
+          animations: {
+            enabled: false,
+          },
+        },
+        legend: {
+          show: false,
+          onItemHover: {
+            highlightDataSeries: false,
+          },
+        },
+        tooltip: {
+          enabled: false,
+        },
+        xaxis: {
+          labels: {
+            show: false,
+          },
+          type: "numeric",
+        },
+        yaxis: {
+          tickAmount: 2,
+          min: -5,
+          max: 5,
+          labels: {
+            show: false,
+          },
+          opacity: 0,
+        },
+      },
     };
   },
   computed: {
@@ -100,14 +158,24 @@ export default defineComponent({
   mounted() {
     this.initEngine();
 
+    this.graphTimer = setInterval(() => {
+      const copy = [...this.evalHistory];
+      this.series[0].data = copy;
+    }, 50);
+
     window.addEventListener("keydown", this.handleKeydown);
   },
   beforeUnmount() {
+    clearInterval(this.graphTimer!);
+
     window.removeEventListener("keydown", this.handleKeydown);
 
     this.sendEngineCommand("quit");
   },
   methods: {
+    evalFunction(x: number) {
+      return (5 - Math.pow(2, -(Math.abs(x) - 2.319281))) * (x < 0 ? -1 : 1);
+    },
     normalizePerspectiveScore(score: number) {
       if (this.sideToMove === "black") {
         return -score;
@@ -138,6 +206,11 @@ export default defineComponent({
     async updatedMove(moves: any) {
       this.moveHistoryLan = moves["moveHistoryLan"];
       this.moveHistorySan = moves["moveHistorySan"];
+
+      const score = extractScore(this.engine_info.score, this.sideToMove) / 100;
+      this.evalHistory.push(
+        this.evalFunction(this.normalizePerspectiveScore(score))
+      );
 
       this.shiftInfoStats();
 
@@ -206,6 +279,10 @@ export default defineComponent({
 
       filtered.score = this.normalizeScoreStr(filtered.score);
 
+      if (filtered.score === "") {
+        filtered.score = this.engine_info.score;
+      }
+
       // only update changed values
       this.engine_info = { ...this.engine_info, ...filtered };
 
@@ -218,6 +295,15 @@ export default defineComponent({
       ) {
         (this.$refs.chessGroundBoardRef as any).drawMove(
           this.engine_info.pv[0]
+        );
+      }
+
+      if (this.engine_info.score) {
+        const score =
+          extractScore(this.engine_info.score, this.sideToMove) / 100;
+        const lastIndex = Math.max(0, this.evalHistory.length - 1);
+        this.evalHistory[lastIndex] = this.evalFunction(
+          this.normalizePerspectiveScore(score)
         );
       }
 
@@ -257,11 +343,13 @@ export default defineComponent({
       }
     },
     async newPosition(fen: string) {
-      this.engineLines.clear();
+      this.clearInfoStats();
       this.startFen = fen;
 
       this.moveHistoryLan = [];
       this.moveHistorySan = [];
+
+      this.evalHistory = [];
 
       (this.$refs.chessGroundBoardRef as any).newPositionFen(fen);
 
@@ -271,6 +359,12 @@ export default defineComponent({
       }
     },
     async playMoves(moves: string) {
+      const n = moves.trim().split(" ").length;
+      const lastEval = this.evalHistory[this.evalHistory.length - 1];
+      for (let i = 0; i < n; i++) {
+        this.evalHistory.push(lastEval);
+      }
+
       await this.sendEngineCommand("stop");
       (this.$refs.chessGroundBoardRef as any).playMoves(moves);
     },
@@ -399,7 +493,14 @@ export default defineComponent({
               :movehistory="moveHistorySan"
               :key="currentFen"
             />
-            <div class="analysis-graph"></div>
+            <div class="analysis-graph">
+              <apexchart
+                height="100%"
+                :options="options"
+                :series="series"
+                type="line"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -434,31 +535,6 @@ h1 {
   flex: 0 0 60%;
   box-sizing: border-box;
   max-width: 60%;
-}
-
-@media only screen and (min-width: 600px) {
-  .board-space {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    height: 100%;
-    padding-left: 5rem;
-  }
-}
-
-@media only screen and (max-width: 600px) {
-  .board-space {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    height: 100%;
-  }
 }
 
 .analysis-info {
@@ -512,7 +588,7 @@ h1 {
   display: flex;
   flex-direction: column;
   flex-grow: 0 !important;
-  height: 50%;
+  height: calc(40vh - 100px);
   margin-bottom: 20px;
   gap: 10px;
 }
@@ -524,59 +600,6 @@ h1 {
 }
 
 .analysis-graph {
-  flex-basis: calc(50% - 5px);
-  background-color: #ae9b9b;
-}
-
-.promotion-options {
-  position: absolute;
-  width: 20%;
-  height: auto;
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-#promotion-select {
-  display: flex;
-  justify-content: space-evenly;
-  align-items: center;
-  min-width: 5%;
-  padding: 5px;
-}
-
-#promotion-select button {
-  background-color: transparent;
-  border: none;
-  outline: none;
-  color: inherit;
-  border: none;
-  padding: 0;
-  font: inherit;
-  cursor: pointer;
-  outline: inherit;
-  z-index: 3;
-}
-
-#promotion-select .piece {
-  width: 20%;
-  height: 5rem;
-  background-size: contain;
-  background-repeat: no-repeat;
-  display: inline-block;
-}
-
-.white-bishop {
-  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+PGcgZmlsbD0ibm9uZSIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxnIGZpbGw9IiNmZmYiIHN0cm9rZS1saW5lY2FwPSJidXR0Ij48cGF0aCBkPSJNOSAzNmMzLjM5LS45NyAxMC4xMS40MyAxMy41LTIgMy4zOSAyLjQzIDEwLjExIDEuMDMgMTMuNSAyIDAgMCAxLjY1LjU0IDMgMi0uNjguOTctMS42NS45OS0zIC41LTMuMzktLjk3LTEwLjExLjQ2LTEzLjUtMS0zLjM5IDEuNDYtMTAuMTEuMDMtMTMuNSAxLTEuMzU0LjQ5LTIuMzIzLjQ3LTMtLjUgMS4zNTQtMS45NCAzLTIgMy0yeiIvPjxwYXRoIGQ9Ik0xNSAzMmMyLjUgMi41IDEyLjUgMi41IDE1IDAgLjUtMS41IDAtMiAwLTIgMC0yLjUtMi41LTQtMi41LTQgNS41LTEuNSA2LTExLjUtNS0xNS41LTExIDQtMTAuNSAxNC01IDE1LjUgMCAwLTIuNSAxLjUtMi41IDQgMCAwLS41LjUgMCAyeiIvPjxwYXRoIGQ9Ik0yNSA4YTIuNSAyLjUgMCAxIDEtNSAwIDIuNSAyLjUgMCAxIDEgNSAweiIvPjwvZz48cGF0aCBkPSJNMTcuNSAyNmgxME0xNSAzMGgxNW0tNy41LTE0LjV2NU0yMCAxOGg1IiBzdHJva2UtbGluZWpvaW49Im1pdGVyIi8+PC9nPjwvc3ZnPg==");
-}
-
-.white-knight {
-  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+PGcgZmlsbD0ibm9uZSIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwYXRoIGQ9Ik0yMiAxMGMxMC41IDEgMTYuNSA4IDE2IDI5SDE1YzAtOSAxMC02LjUgOC0yMSIgZmlsbD0iI2ZmZiIvPjxwYXRoIGQ9Ik0yNCAxOGMuMzggMi45MS01LjU1IDcuMzctOCA5LTMgMi0yLjgyIDQuMzQtNSA0LTEuMDQyLS45NCAxLjQxLTMuMDQgMC0zLTEgMCAuMTkgMS4yMy0xIDItMSAwLTQuMDAzIDEtNC00IDAtMiA2LTEyIDYtMTJzMS44OS0xLjkgMi0zLjVjLS43My0uOTk0LS41LTItLjUtMyAxLTEgMyAyLjUgMyAyLjVoMnMuNzgtMS45OTIgMi41LTNjMSAwIDEgMyAxIDMiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNOS41IDI1LjVhLjUuNSAwIDEgMS0xIDAgLjUuNSAwIDEgMSAxIDB6bTUuNDMzLTkuNzVhLjUgMS41IDMwIDEgMS0uODY2LS41LjUgMS41IDMwIDEgMSAuODY2LjV6IiBmaWxsPSIjMDAwIi8+PC9nPjwvc3ZnPg==");
-}
-
-.white-rook {
-  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+PGcgZmlsbD0iI2ZmZiIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwYXRoIGQ9Ik05IDM5aDI3di0zSDl2M3ptMy0zdi00aDIxdjRIMTJ6bS0xLTIyVjloNHYyaDVWOWg1djJoNVY5aDR2NSIgc3Ryb2tlLWxpbmVjYXA9ImJ1dHQiLz48cGF0aCBkPSJNMzQgMTRsLTMgM0gxNGwtMy0zIi8+PHBhdGggZD0iTTMxIDE3djEyLjVIMTRWMTciIHN0cm9rZS1saW5lY2FwPSJidXR0IiBzdHJva2UtbGluZWpvaW49Im1pdGVyIi8+PHBhdGggZD0iTTMxIDI5LjVsMS41IDIuNWgtMjBsMS41LTIuNSIvPjxwYXRoIGQ9Ik0xMSAxNGgyMyIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVqb2luPSJtaXRlciIvPjwvZz48L3N2Zz4=");
-}
-
-.white-queen {
-  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+PGcgZmlsbD0iI2ZmZiIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwYXRoIGQ9Ik04IDEyYTIgMiAwIDEgMS00IDAgMiAyIDAgMSAxIDQgMHptMTYuNS00LjVhMiAyIDAgMSAxLTQgMCAyIDIgMCAxIDEgNCAwek00MSAxMmEyIDIgMCAxIDEtNCAwIDIgMiAwIDEgMSA0IDB6TTE2IDguNWEyIDIgMCAxIDEtNCAwIDIgMiAwIDEgMSA0IDB6TTMzIDlhMiAyIDAgMSAxLTQgMCAyIDIgMCAxIDEgNCAweiIvPjxwYXRoIGQ9Ik05IDI2YzguNS0xLjUgMjEtMS41IDI3IDBsMi0xMi03IDExVjExbC01LjUgMTMuNS0zLTE1LTMgMTUtNS41LTE0VjI1TDcgMTRsMiAxMnoiIHN0cm9rZS1saW5lY2FwPSJidXR0Ii8+PHBhdGggZD0iTTkgMjZjMCAyIDEuNSAyIDIuNSA0IDEgMS41IDEgMSAuNSAzLjUtMS41IDEtMS41IDIuNS0xLjUgMi41LTEuNSAxLjUuNSAyLjUuNSAyLjUgNi41IDEgMTYuNSAxIDIzIDAgMCAwIDEuNS0xIDAtMi41IDAgMCAuNS0xLjUtMS0yLjUtLjUtMi41LS41LTIgLjUtMy41IDEtMiAyLjUtMiAyLjUtNC04LjUtMS41LTE4LjUtMS41LTI3IDB6IiBzdHJva2UtbGluZWNhcD0iYnV0dCIvPjxwYXRoIGQ9Ik0xMS41IDMwYzMuNS0xIDE4LjUtMSAyMiAwTTEyIDMzLjVjNi0xIDE1LTEgMjEgMCIgZmlsbD0ibm9uZSIvPjwvZz48L3N2Zz4=");
+  flex-basis: calc(45% - 5px);
 }
 </style>

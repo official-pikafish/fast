@@ -88,7 +88,7 @@ export default defineComponent({
 
       size -= 7; // adjust for borders and padding
       // fix chrome alignment errors; https://github.com/ornicar/lila/pull/3881
-      size -= size % 8; // ensure the size is a multiple of 8
+      size -= size % 32; // ensure the size is a multiple of 32
 
       size = Math.min(size, 800);
 
@@ -125,7 +125,7 @@ export default defineComponent({
       // emit new fen
       this.$emit("updated-cg", this.game.fen());
     },
-    drawMove(move: Move) {
+    async drawMove(move: Move) {
       const { from, to } = uci2cg(move.orig, move.dest);
       this.cg?.setShapes([
         {
@@ -135,7 +135,7 @@ export default defineComponent({
         },
       ]);
     },
-    drawMoveStr(origin: string, dest: string) {
+    async drawMoveStr(origin: string, dest: string) {
       const { from, to } = uci2cg(origin, dest);
       this.cg?.setShapes([
         {
@@ -217,12 +217,6 @@ export default defineComponent({
       this.clearLastMove();
 
       for (let i = 0; i < movesArray.length; i++) {
-        if (this.game.isGameOver()) {
-          this.updateCG();
-
-          return;
-        }
-
         const move = movesArray[i];
         const chessMove: any = this.game.move(move);
 
@@ -244,8 +238,8 @@ export default defineComponent({
       this.moveHistoryLan = [];
       this.moveHistorySan = [];
 
-      this.updateCG();
       this.clearLastMove();
+      this.sendUpdates();
     },
     async newPositionPgn(pgn: string) {
       this.game.loadPgn(pgn);
@@ -255,10 +249,13 @@ export default defineComponent({
       this.moveHistoryLan = [];
       this.moveHistorySan = [];
 
-      history.forEach((move) => {
-        this.updateMove(move);
-        this.clearLastMove();
+      history.forEach((move: any) => {
+        this.moveHistoryLan.push(move.iccs);
+        this.moveHistorySan.push(move.iccs);
       });
+
+      this.clearLastMove();
+      this.sendUpdates();
     },
   },
 });

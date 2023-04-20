@@ -1,11 +1,11 @@
 /** Colored board squares as an embedded SVG */
 cg-board {
-    background-image: url('../imgs/xiangqi.svg');
+    background-image: url('../imgs/xiangqi.png');
 }
-  
-  /** Interactive board square colors */
+
+/** Interactive board square colors */
 cg-board square.move-dest {
-  background: radial-gradient(rgba(20, 85, 30, 0.5) 22%, #208530 0, rgba(0, 0, 0, 0.3) 0, rgba(0, 0, 0, 0) 0);
+  background: radial-gradient(rgba(20, 85, 30, 0.5) 23%, transparent calc(23% + 1px),  transparent 0);
   pointer-events: auto;
 }
 cg-board square.premove-dest {

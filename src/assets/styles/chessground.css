@@ -149,15 +149,15 @@ piece.fading {
   flex-flow: column;
 }
 .cg-wrap coords.bottom {
-  bottom: var(--files-bottom);
-  left: var(--files-left);
+  bottom: -1rem;
+  left: 0;
   width: 100%;
   height: 16px;
   text-align: center;
 }
 .cg-wrap coords.top {
-  top: var(--files-top);
-  left: var(--files-left);
+  top: -1.3rem;
+  left: 0;
   width: 100%;
   height: 16px;
   text-align: center;
